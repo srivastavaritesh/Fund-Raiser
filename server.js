@@ -1,15 +1,16 @@
-const express=require("express"),session=require("express-session"),multer=require("multer"),{createClient}=require("@supabase/supabase-js"),path=require("path");
+const express=require("express"),session=require("express-session"),multer=require("multer"),{createClient}=require("@supabase/supabase-js"),path=require("path"),crypto=require("crypto");
 const app=express(),PORT=process.env.PORT||3000,BUCKET="medical-documents";
 const supabase=createClient(process.env.SUPABASE_URL||"",process.env.SUPABASE_SERVICE_ROLE_KEY||"",{auth:{persistSession:false,autoRefreshToken:false}});
 app.use(express.json());app.use(express.urlencoded({extended:true}));
 app.use(session({secret:process.env.SESSION_SECRET||"change-me",resave:false,saveUninitialized:false,cookie:{httpOnly:true,sameSite:"lax",secure:process.env.NODE_ENV==="production",maxAge:8*60*60*1000}}));
 const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:10*1024*1024},fileFilter:(_r,f,cb)=>cb(null,["image/png","image/jpeg","image/webp","application/pdf"].includes(f.mimetype))});
-const admin=(req,res,next)=>req.session.isAdmin?next():res.status(401).json({error:"Admin authentication required."});
+const adminToken=()=>crypto.createHmac("sha256",process.env.SESSION_SECRET||"change-me").update("fundraiser-admin").digest("hex");
+const admin=(req,res,next)=>{const bearer=(req.headers.authorization||"").replace(/^Bearer\s+/i,"");if(req.session.isAdmin||bearer===adminToken())return next();return res.status(401).json({error:"Admin authentication required."})};
 async function settings(){const {data,error}=await supabase.from("site_settings").select("*").eq("id",1).single();if(error)throw error;return data}
 async function signed(p,sec=3600){if(!p)return"";const {data,error}=await supabase.storage.from(BUCKET).createSignedUrl(p,sec);if(error)throw error;return data.signedUrl}
 function shape(x,qr=""){return{patientName:x.patient_name,disease:x.disease,hospital:x.hospital,hepatologist:x.hepatologist,oncologist:x.oncologist,treatment:x.treatment,protocol:x.protocol,injections:x.injections,tremelimumabCost:x.tremelimumab_cost,durvalumabCost:x.durvalumab_cost,duration:x.duration,qrImage:qr,bankDetails:{accountName:x.bank_account_name||"",accountNumber:x.bank_account_number||"",ifsc:x.bank_ifsc||"",bankName:x.bank_name||"",branch:x.bank_branch||""}}}
 app.get("/api/site",async(_q,res)=>{try{const s=await settings(),qr=s.qr_path?await signed(s.qr_path):"";const {data:d,error}=await supabase.from("documents").select("id,name,storage_path").eq("is_public",true).order("created_at",{ascending:false});if(error)throw error;const docs=[];for(const x of d||[])docs.push({id:x.id,name:x.name,url:await signed(x.storage_path)});res.json({...shape(s,qr),documents:docs})}catch(e){res.status(500).json({error:e.message})}});
-app.post("/api/admin/login",(req,res)=>{if(!process.env.ADMIN_PASSWORD||req.body.password!==process.env.ADMIN_PASSWORD)return res.status(401).json({error:"Invalid password."});req.session.isAdmin=true;res.json({ok:true})});
+app.post("/api/admin/login",(req,res)=>{if(!process.env.ADMIN_PASSWORD||req.body.password!==process.env.ADMIN_PASSWORD)return res.status(401).json({error:"Invalid password."});req.session.isAdmin=true;res.json({ok:true,token:adminToken()})});
 app.post("/api/admin/logout",admin,(req,res)=>req.session.destroy(()=>res.json({ok:true})));
 app.get("/api/admin/me",(req,res)=>res.json({isAdmin:!!req.session.isAdmin}));
 app.get("/api/admin/site",admin,async(_q,res)=>{try{const s=await settings();res.json({...shape(s),qrPath:s.qr_path})}catch(e){res.status(500).json({error:e.message})}});
