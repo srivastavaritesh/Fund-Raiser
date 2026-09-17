@@ -1,128 +1,23 @@
-const express = require("express");
-const session = require("express-session");
-const multer = require("multer");
-const bcrypt = require("bcryptjs");
-const fs = require("fs");
-const path = require("path");
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-const DATA_FILE = path.join(__dirname, "data", "site.json");
-const UPLOAD_DIR = path.join(__dirname, "uploads");
-
-if (!process.env.ADMIN_PASSWORD) {
-  console.warn("WARNING: ADMIN_PASSWORD is not set. Set it before deployment.");
-}
-if (!process.env.SESSION_SECRET) {
-  console.warn("WARNING: SESSION_SECRET is not set. Set it before deployment.");
-}
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(session({
-  secret: process.env.SESSION_SECRET || "change-me",
-  resave: false,
-  saveUninitialized: false,
-  cookie: { httpOnly: true, sameSite: "lax", secure: false, maxAge: 8 * 60 * 60 * 1000 }
-}));
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
-  filename: (_req, file, cb) => {
-    const safe = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
-    cb(null, `${Date.now()}-${safe}`);
-  }
-});
-const upload = multer({
-  storage,
-  limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    const allowed = [
-      "image/png", "image/jpeg", "image/webp",
-      "application/pdf"
-    ];
-    cb(null, allowed.includes(file.mimetype));
-  }
-});
-
-function readData() {
-  return JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
-}
-function writeData(data) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-}
-function adminOnly(req, res, next) {
-  if (!req.session.isAdmin) return res.status(401).json({ error: "Admin authentication required." });
-  next();
-}
-
-app.get("/api/site", (_req, res) => res.json(readData()));
-
-app.post("/api/admin/login", async (req, res) => {
-  const password = String(req.body.password || "");
-  const expected = process.env.ADMIN_PASSWORD || "";
-  if (!expected || !(await bcrypt.compare(password, await bcrypt.hash(expected, 10)))) {
-    return res.status(401).json({ error: "Invalid password." });
-  }
-  req.session.isAdmin = true;
-  res.json({ ok: true });
-});
-
-app.post("/api/admin/logout", adminOnly, (req, res) => {
-  req.session.destroy(() => res.json({ ok: true }));
-});
-
-app.get("/api/admin/me", (req, res) => res.json({ isAdmin: !!req.session.isAdmin }));
-
-app.put("/api/admin/site", adminOnly, (req, res) => {
-  const current = readData();
-  const allowed = [
-    "patientName", "disease", "hospital", "hepatologist", "oncologist",
-    "treatment", "protocol", "injections", "tremelimumabCost",
-    "durvalumabCost", "duration", "bankDetails"
-  ];
-  for (const key of allowed) if (req.body[key] !== undefined) current[key] = req.body[key];
-  writeData(current);
-  res.json(current);
-});
-
-app.post("/api/admin/qr", adminOnly, upload.single("qr"), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: "Please upload a PNG/JPG/WEBP QR image." });
-  const current = readData();
-  current.qrImage = `/uploads/${req.file.filename}`;
-  writeData(current);
-  res.json({ qrImage: current.qrImage });
-});
-
-app.post("/api/admin/documents", adminOnly, upload.single("document"), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: "Please upload a PDF or image." });
-  const current = readData();
-  const item = {
-    id: Date.now().toString(),
-    name: req.file.originalname,
-    url: `/uploads/${req.file.filename}`
-  };
-  current.documents.push(item);
-  writeData(current);
-  res.json(item);
-});
-
-app.delete("/api/admin/documents/:id", adminOnly, (req, res) => {
-  const current = readData();
-  const item = current.documents.find(d => d.id === req.params.id);
-  current.documents = current.documents.filter(d => d.id !== req.params.id);
-  if (item) {
-    const filename = path.basename(item.url);
-    const full = path.join(UPLOAD_DIR, filename);
-    if (fs.existsSync(full)) fs.unlinkSync(full);
-  }
-  writeData(current);
-  res.json({ ok: true });
-});
-
-app.use("/uploads", express.static(UPLOAD_DIR));
-app.use(express.static(path.join(__dirname, "public")));
-
-app.listen(PORT, () => {
-  console.log(`Fundraising website running at http://localhost:${PORT}`);
-});
+const express=require("express"),session=require("express-session"),multer=require("multer"),{createClient}=require("@supabase/supabase-js"),path=require("path");
+const app=express(),PORT=process.env.PORT||3000,BUCKET="medical-documents";
+const supabase=createClient(process.env.SUPABASE_URL||"",process.env.SUPABASE_SERVICE_ROLE_KEY||"",{auth:{persistSession:false,autoRefreshToken:false}});
+app.use(express.json());app.use(express.urlencoded({extended:true}));
+app.use(session({secret:process.env.SESSION_SECRET||"change-me",resave:false,saveUninitialized:false,cookie:{httpOnly:true,sameSite:"lax",secure:process.env.NODE_ENV==="production",maxAge:8*60*60*1000}}));
+const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:10*1024*1024},fileFilter:(_r,f,cb)=>cb(null,["image/png","image/jpeg","image/webp","application/pdf"].includes(f.mimetype))});
+const admin=(req,res,next)=>req.session.isAdmin?next():res.status(401).json({error:"Admin authentication required."});
+async function settings(){const {data,error}=await supabase.from("site_settings").select("*").eq("id",1).single();if(error)throw error;return data}
+async function signed(p,sec=3600){if(!p)return"";const {data,error}=await supabase.storage.from(BUCKET).createSignedUrl(p,sec);if(error)throw error;return data.signedUrl}
+function shape(x,qr=""){return{patientName:x.patient_name,disease:x.disease,hospital:x.hospital,hepatologist:x.hepatologist,oncologist:x.oncologist,treatment:x.treatment,protocol:x.protocol,injections:x.injections,tremelimumabCost:x.tremelimumab_cost,durvalumabCost:x.durvalumab_cost,duration:x.duration,qrImage:qr,bankDetails:{accountName:x.bank_account_name||"",accountNumber:x.bank_account_number||"",ifsc:x.bank_ifsc||"",bankName:x.bank_name||"",branch:x.bank_branch||""}}}
+app.get("/api/site",async(_q,res)=>{try{const s=await settings(),qr=s.qr_path?await signed(s.qr_path):"";const {data:d,error}=await supabase.from("documents").select("id,name,storage_path").eq("is_public",true).order("created_at",{ascending:false});if(error)throw error;const docs=[];for(const x of d||[])docs.push({id:x.id,name:x.name,url:await signed(x.storage_path)});res.json({...shape(s,qr),documents:docs})}catch(e){res.status(500).json({error:e.message})}});
+app.post("/api/admin/login",(req,res)=>{if(!process.env.ADMIN_PASSWORD||req.body.password!==process.env.ADMIN_PASSWORD)return res.status(401).json({error:"Invalid password."});req.session.isAdmin=true;res.json({ok:true})});
+app.post("/api/admin/logout",admin,(req,res)=>req.session.destroy(()=>res.json({ok:true})));
+app.get("/api/admin/me",(req,res)=>res.json({isAdmin:!!req.session.isAdmin}));
+app.get("/api/admin/site",admin,async(_q,res)=>{try{const s=await settings();res.json({...shape(s),qrPath:s.qr_path})}catch(e){res.status(500).json({error:e.message})}});
+app.put("/api/admin/site",admin,async(req,res)=>{try{const b=req.body.bankDetails||{};const u={patient_name:req.body.patientName,disease:req.body.disease,hospital:req.body.hospital,hepatologist:req.body.hepatologist,oncologist:req.body.oncologist,treatment:req.body.treatment,protocol:req.body.protocol,injections:req.body.injections,tremelimumab_cost:req.body.tremelimumabCost,durvalumab_cost:req.body.durvalumabCost,duration:req.body.duration,bank_account_name:b.accountName||"",bank_account_number:b.accountNumber||"",bank_ifsc:b.ifsc||"",bank_name:b.bankName||"",bank_branch:b.branch||"",updated_at:new Date().toISOString()};const {error}=await supabase.from("site_settings").update(u).eq("id",1);if(error)throw error;res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
+app.post("/api/admin/qr",admin,upload.single("qr"),async(req,res)=>{try{if(!req.file)return res.status(400).json({error:"Choose a QR image first."});const ext=req.file.mimetype==="image/png"?"png":req.file.mimetype==="image/webp"?"webp":"jpg",p="qr/donation-qr."+ext;let z=await supabase.storage.from(BUCKET).upload(p,req.file.buffer,{contentType:req.file.mimetype,upsert:true});if(z.error)throw z.error;z=await supabase.from("site_settings").update({qr_path:p,updated_at:new Date().toISOString()}).eq("id",1);if(z.error)throw z.error;res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
+app.get("/api/admin/documents",admin,async(_q,res)=>{try{const {data,error}=await supabase.from("documents").select("id,name,storage_path,is_public").order("created_at",{ascending:false});if(error)throw error;const out=[];for(const d of data||[])out.push({id:d.id,name:d.name,isPublic:d.is_public,url:await signed(d.storage_path)});res.json(out)}catch(e){res.status(500).json({error:e.message})}});
+app.post("/api/admin/documents",admin,upload.single("document"),async(req,res)=>{try{if(!req.file)return res.status(400).json({error:"Choose a PDF or image first."});const name=req.file.originalname.replace(/[^a-zA-Z0-9._-]/g,"_"),p=`documents/${Date.now()}-${name}`;let z=await supabase.storage.from(BUCKET).upload(p,req.file.buffer,{contentType:req.file.mimetype});if(z.error)throw z.error;z=await supabase.from("documents").insert({name:req.file.originalname,storage_path:p,is_public:false}).select("id,name,is_public").single();if(z.error){await supabase.storage.from(BUCKET).remove([p]);throw z.error}res.json({ok:true,document:z.data})}catch(e){res.status(500).json({error:e.message||"Document upload failed."})}});
+app.patch("/api/admin/documents/:id",admin,async(req,res)=>{try{const {error}=await supabase.from("documents").update({is_public:!!req.body.isPublic}).eq("id",req.params.id);if(error)throw error;res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
+app.delete("/api/admin/documents/:id",admin,async(req,res)=>{try{const {data:d,error:e}=await supabase.from("documents").select("storage_path").eq("id",req.params.id).single();if(e)throw e;let z=await supabase.from("documents").delete().eq("id",req.params.id);if(z.error)throw z.error;await supabase.storage.from(BUCKET).remove([d.storage_path]);res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
+app.use(express.static(path.join(__dirname,"public")));
+app.listen(PORT,()=>console.log("Fundraising website running on port "+PORT));
