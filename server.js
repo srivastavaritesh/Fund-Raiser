@@ -3,7 +3,7 @@ const app=express(),PORT=process.env.PORT||3000,BUCKET="medical-documents";
 const supabase=createClient(process.env.SUPABASE_URL||"",process.env.SUPABASE_SERVICE_ROLE_KEY||"",{auth:{persistSession:false,autoRefreshToken:false}});
 app.use(express.json());app.use(express.urlencoded({extended:true}));
 app.use(session({secret:process.env.SESSION_SECRET||"change-me",resave:false,saveUninitialized:false,cookie:{httpOnly:true,sameSite:"lax",secure:process.env.NODE_ENV==="production",maxAge:8*60*60*1000}}));
-const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:10*1024*1024},fileFilter:(_r,f,cb)=>cb(null,["image/png","image/jpeg","image/webp","application/pdf"].includes(f.mimetype))});
+const upload=multer({storage:multer.memoryStorage(),limits: { fileSize: 50 * 1024 * 1024 },fileFilter:(_r,f,cb)=>cb(null,["image/png","image/jpeg","image/webp","application/pdf"].includes(f.mimetype))});
 const adminToken=()=>crypto.createHmac("sha256",process.env.SESSION_SECRET||"change-me").update("fundraiser-admin").digest("hex");
 const admin=(req,res,next)=>{const bearer=(req.headers.authorization||"").replace(/^Bearer\s+/i,"");if(req.session.isAdmin||bearer===adminToken())return next();return res.status(401).json({error:"Admin authentication required."})};
 async function settings(){const {data,error}=await supabase.from("site_settings").select("*").eq("id",1).single();if(error)throw error;return data}
