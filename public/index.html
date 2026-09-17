@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Support Sudhir Kumar Srivastava</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Support Sudhir's Treatment</div>
+    <a class="admin-link" href="/admin.html">Admin</a>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-inner">
+        <p class="eyebrow">HELP US WITH HIS TREATMENT</p>
+        <h1 id="patientName">Sudhir Kumar Srivastava</h1>
+        <p class="lead">Our family is raising funds to support the ongoing treatment and medical expenses of Sudhir Kumar Srivastava.</p>
+        <a class="button" href="#donate">How to Help</a>
+      </div>
+    </section>
+
+    <section class="card-grid">
+      <div class="card"><span>Disease</span><strong id="disease"></strong></div>
+      <div class="card"><span>Hospital</span><strong id="hospital"></strong></div>
+      <div class="card"><span>Hepatologist</span><strong id="hepatologist"></strong></div>
+      <div class="card"><span>Oncologist</span><strong id="oncologist"></strong></div>
+    </section>
+
+    <section class="section">
+      <h2>Treatment Details</h2>
+      <div class="details">
+        <div><label>Treatment</label><p id="treatment"></p></div>
+        <div><label>Protocol</label><p id="protocol"></p></div>
+        <div><label>Injection</label><p id="injections"></p></div>
+        <div><label>Duration</label><p id="duration"></p></div>
+      </div>
+    </section>
+
+    <section class="section cost-box">
+      <h2>Estimated Treatment Cost</h2>
+      <div class="cost-row">
+        <div><span>Tremelimumab</span><strong id="tremelimumabCost"></strong></div>
+        <div><span>Durvalumab</span><strong id="durvalumabCost"></strong></div>
+      </div>
+      <p class="note">The above amounts are the stated per-treatment medicine costs. Actual medical expenses may vary.</p>
+    </section>
+
+    <section id="donate" class="section donate">
+      <h2>Support His Treatment</h2>
+      <p>If you would like to help, you can contribute using the QR code or bank details below.</p>
+      <div class="donate-grid">
+        <div class="qr-panel">
+          <h3>Scan & Donate</h3>
+          <div id="qrWrap" class="qr-wrap"><span>QR code will be added by the admin.</span></div>
+        </div>
+        <div class="bank-panel">
+          <h3>Bank Transfer</h3>
+          <div id="bankDetails"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section documents">
+      <h2>Medical Documents</h2>
+      <p class="muted">Documents shared by the family for transparency.</p>
+      <div id="documentsList"></div>
+    </section>
+
+    <section class="section disclaimer">
+      <p><strong>Important:</strong> Please verify the beneficiary and payment details before making a contribution. Medical treatment and costs are subject to the treating doctors' advice and hospital billing.</p>
+    </section>
+  </main>
+
+  <footer>
+    <span>Thank you for your support, prayers and kindness.</span>
+  </footer>
+  <script src="/app.js"></script>
+</body>
+</html>
