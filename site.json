@@ -1,0 +1,22 @@
+{
+  "patientName": "Sudhir Kumar Srivastava",
+  "disease": "Liver Cancer (Hepatocellular Carcinoma HCC) and Cirrhosis",
+  "hospital": "Jupiter Hospital, Baner",
+  "hepatologist": "Dr. Pavan Hanchanale",
+  "oncologist": "Dr. Pratik Patil",
+  "treatment": "Immunotherapy",
+  "protocol": "Stride Protocol",
+  "injections": "Durvalumab 1500mg + Tremelimumab 300mg",
+  "tremelimumabCost": "\u20b94,00,000",
+  "durvalumabCost": "\u20b92,30,000",
+  "duration": "Once per month for a year (12 times) for Durvalumab 1500mg; one time at the start for Tremelimumab 300mg",
+  "qrImage": "",
+  "bankDetails": {
+    "accountName": "",
+    "accountNumber": "",
+    "ifsc": "",
+    "bankName": "",
+    "branch": ""
+  },
+  "documents": []
+}
